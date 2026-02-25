@@ -15,6 +15,9 @@
   <!-- Grist Plugin API -->
   <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
   
+  <!-- SheetJS for XLSX export -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -621,6 +624,74 @@
       color: white;
       border-color: var(--primary);
     }
+
+    /* Export dropdown */
+    .export-dropdown {
+      position: relative;
+    }
+    .export-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 150px;
+      z-index: 200;
+      overflow: hidden;
+    }
+    .export-menu button {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      border: none;
+      background: white;
+      text-align: left;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .export-menu button:hover {
+      background: #f1f5f9;
+    }
+
+    /* Save config list */
+    .config-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-top: 8px;
+    }
+    .config-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .config-item:last-child {
+      border-bottom: none;
+    }
+    .config-item-actions {
+      display: flex;
+      gap: 4px;
+    }
+    .config-item-btn {
+      padding: 4px 8px;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .config-item-btn.load {
+      background: var(--primary);
+      color: white;
+    }
+    .config-item-btn.delete {
+      background: var(--danger);
+      color: white;
+    }
   </style>
 </head>
 <body>
@@ -636,9 +707,19 @@
       <button class="toolbar-btn" onclick="openModal('conditional-modal')" title="Format conditionnel">
         📊 <span data-i18n="conditionalFormat">Conditionnel</span>
       </button>
-      <button class="export-btn" onclick="exportToCSV()">
-        📥 <span data-i18n="export">Exporter</span>
+      <button class="toolbar-btn" onclick="openModal('save-modal')" title="Sauvegarder/Charger">
+        💾 <span data-i18n="saveLoad">Config</span>
       </button>
+      <div class="export-dropdown">
+        <button class="export-btn" onclick="toggleExportMenu()">
+          📥 <span data-i18n="export">Exporter</span> ▼
+        </button>
+        <div class="export-menu hidden" id="export-menu">
+          <button onclick="exportToCSV()">📄 CSV</button>
+          <button onclick="exportToJSON()">📋 JSON</button>
+          <button onclick="exportToXLSX()">📊 Excel (XLSX)</button>
+        </div>
+      </div>
       <button class="lang-btn active" onclick="setLanguage('fr')">FR</button>
       <button class="lang-btn" onclick="setLanguage('en')">EN</button>
     </div>
@@ -887,6 +968,42 @@
       <div class="modal-footer">
         <button class="modal-btn modal-btn-cancel" onclick="closeModal('filter-modal')">Annuler</button>
         <button class="modal-btn modal-btn-apply" onclick="applyFilter()">Appliquer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save/Load Config Modal -->
+  <div id="save-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>💾 Configurations sauvegardées</h2>
+        <button class="modal-close" onclick="closeModal('save-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <h3>Sauvegarder la configuration actuelle</h3>
+          <div class="modal-row">
+            <input type="text" id="config-name" class="modal-input" style="flex:1;width:auto;" placeholder="Nom de la configuration">
+            <button class="modal-btn modal-btn-apply" onclick="saveConfig()">Sauvegarder</button>
+          </div>
+        </div>
+        <div class="modal-section">
+          <h3>Configurations enregistrées</h3>
+          <div class="config-list" id="config-list">
+            <div style="padding:12px;color:#64748b;text-align:center;">Aucune configuration sauvegardée</div>
+          </div>
+        </div>
+        <div class="modal-section">
+          <h3>Import/Export de configuration</h3>
+          <div class="modal-row">
+            <button class="modal-btn" style="background:#6366f1;color:white;" onclick="exportConfig()">📤 Exporter config</button>
+            <button class="modal-btn" style="background:#8b5cf6;color:white;" onclick="document.getElementById('import-config-file').click()">📥 Importer config</button>
+            <input type="file" id="import-config-file" accept=".json" style="display:none;" onchange="importConfig(event)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('save-modal')">Fermer</button>
       </div>
     </div>
   </div>

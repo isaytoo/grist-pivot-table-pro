@@ -878,6 +878,20 @@ function formatNumber(num, fieldName) {
 // EXPORT
 // =============================================================================
 
+function toggleExportMenu() {
+  var menu = document.getElementById('export-menu');
+  menu.classList.toggle('hidden');
+}
+
+// Close export menu when clicking outside
+document.addEventListener('click', function(e) {
+  var menu = document.getElementById('export-menu');
+  var dropdown = document.querySelector('.export-dropdown');
+  if (menu && dropdown && !dropdown.contains(e.target)) {
+    menu.classList.add('hidden');
+  }
+});
+
 function exportToCSV() {
   var table = document.getElementById('pivot-table');
   if (table.classList.contains('hidden')) return;
@@ -901,7 +915,206 @@ function exportToCSV() {
   link.href = URL.createObjectURL(blob);
   link.download = 'pivot_' + selectedTable + '_' + new Date().toISOString().slice(0, 10) + '.csv';
   link.click();
+  
+  document.getElementById('export-menu').classList.add('hidden');
 }
+
+function exportToJSON() {
+  var table = document.getElementById('pivot-table');
+  if (table.classList.contains('hidden')) return;
+  
+  var data = [];
+  var rows = table.querySelectorAll('tbody tr');
+  var headers = [];
+  
+  // Get headers
+  var headerCells = table.querySelectorAll('thead tr:last-child th');
+  headerCells.forEach(function(cell) {
+    headers.push(cell.textContent.trim());
+  });
+  
+  // Get data rows
+  rows.forEach(function(row) {
+    var rowData = {};
+    var cells = row.querySelectorAll('th, td');
+    cells.forEach(function(cell, index) {
+      var header = headers[index] || 'col_' + index;
+      rowData[header] = cell.textContent.trim();
+    });
+    data.push(rowData);
+  });
+  
+  var jsonContent = JSON.stringify(data, null, 2);
+  var blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'pivot_' + selectedTable + '_' + new Date().toISOString().slice(0, 10) + '.json';
+  link.click();
+  
+  document.getElementById('export-menu').classList.add('hidden');
+}
+
+function exportToXLSX() {
+  var table = document.getElementById('pivot-table');
+  if (table.classList.contains('hidden')) return;
+  
+  // Use SheetJS to export
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.table_to_sheet(table);
+  XLSX.utils.book_append_sheet(wb, ws, 'Pivot');
+  XLSX.writeFile(wb, 'pivot_' + selectedTable + '_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+  
+  document.getElementById('export-menu').classList.add('hidden');
+}
+
+// =============================================================================
+// SAVE/LOAD CONFIGURATION
+// =============================================================================
+
+var savedConfigs = [];
+
+function loadSavedConfigs() {
+  try {
+    var stored = localStorage.getItem('pivotTableProConfigs');
+    if (stored) {
+      savedConfigs = JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('Error loading configs:', e);
+    savedConfigs = [];
+  }
+}
+
+function saveSavedConfigs() {
+  try {
+    localStorage.setItem('pivotTableProConfigs', JSON.stringify(savedConfigs));
+  } catch (e) {
+    console.error('Error saving configs:', e);
+  }
+}
+
+function renderConfigList() {
+  var container = document.getElementById('config-list');
+  
+  if (savedConfigs.length === 0) {
+    container.innerHTML = '<div style="padding:12px;color:#64748b;text-align:center;">Aucune configuration sauvegardée</div>';
+    return;
+  }
+  
+  container.innerHTML = '';
+  savedConfigs.forEach(function(config, index) {
+    var div = document.createElement('div');
+    div.className = 'config-item';
+    div.innerHTML = '<span>' + config.name + ' <small style="color:#64748b;">(' + config.date + ')</small></span>' +
+                    '<div class="config-item-actions">' +
+                      '<button class="config-item-btn load" onclick="loadConfig(' + index + ')">Charger</button>' +
+                      '<button class="config-item-btn delete" onclick="deleteConfig(' + index + ')">×</button>' +
+                    '</div>';
+    container.appendChild(div);
+  });
+}
+
+function saveConfig() {
+  var name = document.getElementById('config-name').value.trim();
+  if (!name) {
+    alert('Veuillez entrer un nom pour la configuration');
+    return;
+  }
+  
+  var config = {
+    name: name,
+    date: new Date().toLocaleDateString(),
+    pivotConfig: pivotConfig,
+    displayOptions: displayOptions,
+    cellFormat: cellFormat,
+    conditionalRules: conditionalRules,
+    fieldFilters: fieldFilters,
+    fieldSorts: fieldSorts
+  };
+  
+  savedConfigs.push(config);
+  saveSavedConfigs();
+  renderConfigList();
+  document.getElementById('config-name').value = '';
+}
+
+function loadConfig(index) {
+  var config = savedConfigs[index];
+  if (!config) return;
+  
+  pivotConfig = config.pivotConfig || { rows: [], cols: [], values: [] };
+  displayOptions = config.displayOptions || displayOptions;
+  cellFormat = config.cellFormat || cellFormat;
+  conditionalRules = config.conditionalRules || [];
+  fieldFilters = config.fieldFilters || {};
+  fieldSorts = config.fieldSorts || {};
+  
+  saveOptions();
+  renderPivotZones();
+  renderPivotTable();
+  closeModal('save-modal');
+}
+
+function deleteConfig(index) {
+  if (confirm('Supprimer cette configuration ?')) {
+    savedConfigs.splice(index, 1);
+    saveSavedConfigs();
+    renderConfigList();
+  }
+}
+
+function exportConfig() {
+  var config = {
+    name: 'Pivot Table Pro Config',
+    exportDate: new Date().toISOString(),
+    pivotConfig: pivotConfig,
+    displayOptions: displayOptions,
+    cellFormat: cellFormat,
+    conditionalRules: conditionalRules,
+    fieldFilters: fieldFilters,
+    fieldSorts: fieldSorts
+  };
+  
+  var jsonContent = JSON.stringify(config, null, 2);
+  var blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+  var link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'pivot_config_' + new Date().toISOString().slice(0, 10) + '.json';
+  link.click();
+}
+
+function importConfig(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var config = JSON.parse(e.target.result);
+      
+      pivotConfig = config.pivotConfig || { rows: [], cols: [], values: [] };
+      displayOptions = config.displayOptions || displayOptions;
+      cellFormat = config.cellFormat || cellFormat;
+      conditionalRules = config.conditionalRules || [];
+      fieldFilters = config.fieldFilters || {};
+      fieldSorts = config.fieldSorts || {};
+      
+      saveOptions();
+      renderPivotZones();
+      renderPivotTable();
+      closeModal('save-modal');
+      
+      alert('Configuration importée avec succès !');
+    } catch (err) {
+      alert('Erreur lors de l\'import : ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// Load saved configs on init
+loadSavedConfigs();
 
 // =============================================================================
 // DISPLAY OPTIONS, CELL FORMAT, CONDITIONAL FORMAT
@@ -942,6 +1155,11 @@ function openModal(modalId) {
   // Render conditional rules
   if (modalId === 'conditional-modal') {
     renderCondRules();
+  }
+  
+  // Render saved configs
+  if (modalId === 'save-modal') {
+    renderConfigList();
   }
 }
 
