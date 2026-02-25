@@ -570,21 +570,41 @@ function changeAggregation(field, agg) {
 function renderPivotTable() {
   var placeholder = document.getElementById('pivot-placeholder');
   var table = document.getElementById('pivot-table');
+  var viewToggle = document.getElementById('view-toggle');
+  var chartContainer = document.getElementById('chart-container');
   
   if (pivotConfig.rows.length === 0 && pivotConfig.cols.length === 0 && pivotConfig.values.length === 0) {
     placeholder.classList.remove('hidden');
     table.classList.add('hidden');
+    if (viewToggle) viewToggle.style.display = 'none';
+    if (chartContainer) chartContainer.classList.remove('visible');
     return;
   }
   
   placeholder.classList.add('hidden');
-  table.classList.remove('hidden');
+  
+  // Show view toggle
+  if (viewToggle) viewToggle.style.display = 'flex';
+  
+  // Show table or chart based on current view
+  if (currentView === 'table') {
+    table.classList.remove('hidden');
+    if (chartContainer) chartContainer.classList.remove('visible');
+  } else {
+    table.classList.add('hidden');
+    if (chartContainer) chartContainer.classList.add('visible');
+  }
   
   // Build pivot data
   var pivotData = buildPivotData();
   
   // Render table
   renderPivotTableHTML(pivotData);
+  
+  // Render chart if in chart view
+  if (currentView === 'chart') {
+    renderChart();
+  }
 }
 
 function buildPivotData() {
@@ -1115,6 +1135,187 @@ function importConfig(event) {
 
 // Load saved configs on init
 loadSavedConfigs();
+
+// =============================================================================
+// CHART FUNCTIONS
+// =============================================================================
+
+var currentChart = null;
+var currentChartType = 'bar';
+var currentView = 'table';
+
+var chartColors = [
+  '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1',
+  '#14b8a6', '#eab308', '#dc2626', '#7c3aed', '#db2777'
+];
+
+function showView(view) {
+  currentView = view;
+  var table = document.getElementById('pivot-table');
+  var chart = document.getElementById('chart-container');
+  var btnTable = document.getElementById('btn-view-table');
+  var btnChart = document.getElementById('btn-view-chart');
+  
+  if (view === 'table') {
+    table.classList.remove('hidden');
+    chart.classList.remove('visible');
+    btnTable.classList.add('active');
+    btnChart.classList.remove('active');
+  } else {
+    table.classList.add('hidden');
+    chart.classList.add('visible');
+    btnTable.classList.remove('active');
+    btnChart.classList.add('active');
+    renderChart();
+  }
+}
+
+function setChartType(type) {
+  currentChartType = type;
+  
+  // Update active button
+  document.querySelectorAll('.chart-type-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+    if (btn.dataset.type === type) {
+      btn.classList.add('active');
+    }
+  });
+  
+  renderChart();
+}
+
+function renderChart() {
+  var canvas = document.getElementById('pivot-chart');
+  if (!canvas) return;
+  
+  // Destroy existing chart
+  if (currentChart) {
+    currentChart.destroy();
+    currentChart = null;
+  }
+  
+  // Get data from pivot table
+  var chartData = getChartData();
+  if (!chartData || chartData.labels.length === 0) return;
+  
+  var ctx = canvas.getContext('2d');
+  
+  var config = {
+    type: currentChartType,
+    data: {
+      labels: chartData.labels,
+      datasets: chartData.datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'top',
+          display: chartData.datasets.length > 1 || ['pie', 'doughnut', 'polarArea'].indexOf(currentChartType) !== -1
+        },
+        title: {
+          display: true,
+          text: chartData.title
+        }
+      }
+    }
+  };
+  
+  // Specific options for different chart types
+  if (['pie', 'doughnut', 'polarArea'].indexOf(currentChartType) !== -1) {
+    // For pie/doughnut, use first dataset only with multiple colors
+    config.data.datasets = [{
+      data: chartData.datasets[0].data,
+      backgroundColor: chartColors.slice(0, chartData.labels.length),
+      borderWidth: 1
+    }];
+  } else if (currentChartType === 'radar') {
+    config.options.scales = {
+      r: {
+        beginAtZero: true
+      }
+    };
+  } else {
+    config.options.scales = {
+      y: {
+        beginAtZero: true
+      }
+    };
+  }
+  
+  currentChart = new Chart(ctx, config);
+}
+
+function getChartData() {
+  var rowFields = pivotConfig.rows;
+  var colFields = pivotConfig.cols;
+  var valueFields = pivotConfig.values;
+  
+  if (valueFields.length === 0) return null;
+  
+  var data = getFilteredData();
+  var pivotData = buildPivotData();
+  
+  var labels = [];
+  var datasets = [];
+  
+  // If we have columns, create one dataset per column value
+  if (colFields.length > 0 && pivotData.colKeys.length > 0) {
+    labels = pivotData.rowKeys.map(function(k) { return k.replace(/\|\|\|/g, ' - ') || 'Total'; });
+    
+    pivotData.colKeys.forEach(function(colKey, colIndex) {
+      var colLabel = colKey.replace(/\|\|\|/g, ' - ') || 'Total';
+      var dataPoints = [];
+      
+      pivotData.rowKeys.forEach(function(rowKey) {
+        var cellKey = rowKey + ':::' + colKey;
+        var v = valueFields[0];
+        var values = pivotData.aggMap[cellKey] ? pivotData.aggMap[cellKey][v.field] : [];
+        var result = aggregationFunctions[v.agg](values);
+        dataPoints.push(result);
+      });
+      
+      datasets.push({
+        label: colLabel,
+        data: dataPoints,
+        backgroundColor: chartColors[colIndex % chartColors.length],
+        borderColor: chartColors[colIndex % chartColors.length],
+        borderWidth: 1
+      });
+    });
+  } else {
+    // No columns, just rows
+    labels = pivotData.rowKeys.map(function(k) { return k.replace(/\|\|\|/g, ' - ') || 'Total'; });
+    
+    valueFields.forEach(function(v, vIndex) {
+      var dataPoints = [];
+      
+      pivotData.rowKeys.forEach(function(rowKey) {
+        var values = pivotData.rowTotals[rowKey] ? pivotData.rowTotals[rowKey][v.field] : [];
+        var result = aggregationFunctions[v.agg](values);
+        dataPoints.push(result);
+      });
+      
+      datasets.push({
+        label: v.field + ' (' + t(v.agg) + ')',
+        data: dataPoints,
+        backgroundColor: chartColors[vIndex % chartColors.length],
+        borderColor: chartColors[vIndex % chartColors.length],
+        borderWidth: 1
+      });
+    });
+  }
+  
+  var title = valueFields.map(function(v) { return v.field + ' (' + t(v.agg) + ')'; }).join(', ');
+  
+  return {
+    labels: labels,
+    datasets: datasets,
+    title: title
+  };
+}
 
 // =============================================================================
 // DISPLAY OPTIONS, CELL FORMAT, CONDITIONAL FORMAT

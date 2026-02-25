@@ -18,6 +18,9 @@
   <!-- SheetJS for XLSX export -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   
+  <!-- Chart.js for charts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     
@@ -692,6 +695,64 @@
       background: var(--danger);
       color: white;
     }
+
+    /* Chart styles */
+    .chart-container {
+      display: none;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+    .chart-container.visible {
+      display: block;
+    }
+    .chart-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .chart-type-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chart-type-btn:hover {
+      background: #f1f5f9;
+    }
+    .chart-type-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .chart-canvas-wrapper {
+      position: relative;
+      height: 350px;
+      width: 100%;
+    }
+    .view-toggle {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
+    .view-toggle-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .view-toggle-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
   </style>
 </head>
 <body>
@@ -787,10 +848,31 @@
           <h2 data-i18n="dragFields">Glissez des champs</h2>
           <p data-i18n="dragFieldsDesc">Glissez des champs dans les zones ci-dessus pour créer votre tableau croisé dynamique.</p>
         </div>
+        <!-- View toggle -->
+        <div class="view-toggle" id="view-toggle" style="display:none;">
+          <button class="view-toggle-btn active" onclick="showView('table')" id="btn-view-table">📋 Tableau</button>
+          <button class="view-toggle-btn" onclick="showView('chart')" id="btn-view-chart">📈 Graphique</button>
+        </div>
+        
         <table class="pivot-table hidden" id="pivot-table">
           <thead id="pivot-thead"></thead>
           <tbody id="pivot-tbody"></tbody>
         </table>
+        
+        <!-- Chart container -->
+        <div class="chart-container" id="chart-container">
+          <div class="chart-toolbar">
+            <button class="chart-type-btn active" onclick="setChartType('bar')" data-type="bar">📊 Barres</button>
+            <button class="chart-type-btn" onclick="setChartType('line')" data-type="line">📈 Lignes</button>
+            <button class="chart-type-btn" onclick="setChartType('pie')" data-type="pie">🥧 Camembert</button>
+            <button class="chart-type-btn" onclick="setChartType('doughnut')" data-type="doughnut">🍩 Anneau</button>
+            <button class="chart-type-btn" onclick="setChartType('polarArea')" data-type="polarArea">🎯 Polaire</button>
+            <button class="chart-type-btn" onclick="setChartType('radar')" data-type="radar">🕸️ Radar</button>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="pivot-chart"></canvas>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1008,6 +1090,6 @@
     </div>
   </div>
 
-  <script src="widget.js?v=1.5"></script>
+  <script src="widget.js?v=1.6"></script>
 </body>
 </html>
