@@ -179,8 +179,17 @@ grist.onOptions(function(options) {
   }
   if (options && options.pivotConfig) {
     pivotConfig = options.pivotConfig;
-    renderPivotZones();
   }
+  if (options && options.displayOptions) {
+    displayOptions = options.displayOptions;
+  }
+  if (options && options.cellFormat) {
+    cellFormat = options.cellFormat;
+  }
+  if (options && options.conditionalRules) {
+    conditionalRules = options.conditionalRules;
+  }
+  renderPivotZones();
 });
 
 // Use onRecords to get data from the linked table
@@ -727,36 +736,42 @@ function renderPivotTableHTML(pivotData) {
     }
     
     // Data cells
+    var alignStyle = 'text-align:' + cellFormat.align + ';';
     if (colFields.length > 0) {
       colKeys.forEach(function(colKey) {
         var cellKey = rowKey + ':::' + colKey;
         valueFields.forEach(function(v) {
           var values = pivotData.aggMap[cellKey] ? pivotData.aggMap[cellKey][v.field] : [];
           var result = aggregationFunctions[v.agg](values);
-          bodyHtml += '<td class="value-cell">' + formatNumber(result) + '</td>';
+          var condStyle = getConditionalStyle(result, v.field);
+          bodyHtml += '<td class="value-cell" style="' + alignStyle + condStyle + '">' + formatNumber(result, v.field) + '</td>';
         });
       });
       
-      // Row total
-      valueFields.forEach(function(v) {
-        var values = pivotData.rowTotals[rowKey] ? pivotData.rowTotals[rowKey][v.field] : [];
-        var result = aggregationFunctions[v.agg](values);
-        bodyHtml += '<td class="value-cell total-cell">' + formatNumber(result) + '</td>';
-      });
+      // Row total (only if grandTotals includes rows)
+      if (displayOptions.grandTotals !== 'hide' && displayOptions.grandTotals !== 'cols') {
+        valueFields.forEach(function(v) {
+          var values = pivotData.rowTotals[rowKey] ? pivotData.rowTotals[rowKey][v.field] : [];
+          var result = aggregationFunctions[v.agg](values);
+          bodyHtml += '<td class="value-cell total-cell" style="' + alignStyle + '">' + formatNumber(result, v.field) + '</td>';
+        });
+      }
     } else {
       // No columns, just values
       valueFields.forEach(function(v) {
         var values = pivotData.rowTotals[rowKey] ? pivotData.rowTotals[rowKey][v.field] : [];
         var result = aggregationFunctions[v.agg](values);
-        bodyHtml += '<td class="value-cell">' + formatNumber(result) + '</td>';
+        var condStyle = getConditionalStyle(result, v.field);
+        bodyHtml += '<td class="value-cell" style="' + alignStyle + condStyle + '">' + formatNumber(result, v.field) + '</td>';
       });
     }
     
     bodyHtml += '</tr>';
   });
   
-  // Grand total row
-  if (rowFields.length > 0) {
+  // Grand total row (only if grandTotals includes cols or show)
+  if (rowFields.length > 0 && displayOptions.grandTotals !== 'hide' && displayOptions.grandTotals !== 'rows') {
+    var alignStyle = 'text-align:' + cellFormat.align + ';';
     bodyHtml += '<tr class="total-row">';
     bodyHtml += '<th colspan="' + rowFields.length + '">' + t('grandTotal') + '</th>';
     
@@ -765,17 +780,19 @@ function renderPivotTableHTML(pivotData) {
         valueFields.forEach(function(v) {
           var values = pivotData.colTotals[colKey] ? pivotData.colTotals[colKey][v.field] : [];
           var result = aggregationFunctions[v.agg](values);
-          bodyHtml += '<td class="value-cell">' + formatNumber(result) + '</td>';
+          bodyHtml += '<td class="value-cell" style="' + alignStyle + '">' + formatNumber(result, v.field) + '</td>';
         });
       });
     }
     
     // Grand total
-    valueFields.forEach(function(v) {
-      var values = pivotData.grandTotal[v.field] || [];
-      var result = aggregationFunctions[v.agg](values);
-      bodyHtml += '<td class="value-cell total-cell">' + formatNumber(result) + '</td>';
-    });
+    if (displayOptions.grandTotals === 'show') {
+      valueFields.forEach(function(v) {
+        var values = pivotData.grandTotal[v.field] || [];
+        var result = aggregationFunctions[v.agg](values);
+        bodyHtml += '<td class="value-cell total-cell" style="' + alignStyle + '">' + formatNumber(result, v.field) + '</td>';
+      });
+    }
     
     bodyHtml += '</tr>';
   }
@@ -783,10 +800,40 @@ function renderPivotTableHTML(pivotData) {
   tbody.innerHTML = bodyHtml;
 }
 
-function formatNumber(num) {
+function formatNumber(num, fieldName) {
   if (num === null || num === undefined || isNaN(num)) return '-';
-  if (Number.isInteger(num)) return num.toLocaleString();
-  return num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  
+  // Apply cell format options
+  var decimals = cellFormat.decimals;
+  var thousands = cellFormat.thousands;
+  var currency = cellFormat.currency;
+  var currencyPos = cellFormat.currencyPos;
+  
+  // Format the number
+  var formatted;
+  if (Number.isInteger(num) && decimals === 0) {
+    formatted = Math.round(num).toString();
+  } else {
+    formatted = num.toFixed(decimals);
+  }
+  
+  // Add thousands separator
+  if (thousands) {
+    var parts = formatted.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
+    formatted = parts.join(',');
+  }
+  
+  // Add currency symbol
+  if (currency) {
+    if (currencyPos === 'before') {
+      formatted = currency + ' ' + formatted;
+    } else {
+      formatted = formatted + ' ' + currency;
+    }
+  }
+  
+  return formatted;
 }
 
 // =============================================================================
@@ -816,6 +863,187 @@ function exportToCSV() {
   link.href = URL.createObjectURL(blob);
   link.download = 'pivot_' + selectedTable + '_' + new Date().toISOString().slice(0, 10) + '.csv';
   link.click();
+}
+
+// =============================================================================
+// DISPLAY OPTIONS, CELL FORMAT, CONDITIONAL FORMAT
+// =============================================================================
+
+var displayOptions = {
+  grandTotals: 'show',  // show, hide, rows, cols
+  subtotals: 'hide',    // show, hide
+  viewMode: 'compact'   // compact, classic, flat
+};
+
+var cellFormat = {
+  decimals: 2,
+  thousands: ' ',
+  currency: '',
+  currencyPos: 'after',
+  align: 'right'
+};
+
+var conditionalRules = [];
+
+// Modal functions
+function openModal(modalId) {
+  document.getElementById(modalId).classList.remove('hidden');
+  
+  // Populate format field select
+  if (modalId === 'format-modal') {
+    var select = document.getElementById('format-field');
+    select.innerHTML = '<option value="">-- Toutes les valeurs --</option>';
+    pivotConfig.values.forEach(function(v) {
+      var opt = document.createElement('option');
+      opt.value = v.field;
+      opt.textContent = v.field;
+      select.appendChild(opt);
+    });
+  }
+  
+  // Render conditional rules
+  if (modalId === 'conditional-modal') {
+    renderCondRules();
+  }
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+}
+
+function closeModalOnOverlay(event) {
+  if (event.target.classList.contains('modal-overlay')) {
+    event.target.classList.add('hidden');
+  }
+}
+
+function applyDisplayOptions() {
+  displayOptions.grandTotals = document.querySelector('input[name="grand-totals"]:checked').value;
+  displayOptions.subtotals = document.querySelector('input[name="subtotals"]:checked').value;
+  displayOptions.viewMode = document.querySelector('input[name="view-mode"]:checked').value;
+  
+  saveOptions();
+  renderPivotTable();
+  closeModal('display-modal');
+}
+
+function applyCellFormat() {
+  cellFormat.decimals = parseInt(document.getElementById('format-decimals').value) || 2;
+  cellFormat.thousands = document.getElementById('format-thousands').value;
+  cellFormat.currency = document.getElementById('format-currency').value;
+  cellFormat.currencyPos = document.getElementById('format-currency-pos').value;
+  cellFormat.align = document.querySelector('input[name="format-align"]:checked').value;
+  
+  saveOptions();
+  renderPivotTable();
+  closeModal('format-modal');
+}
+
+// Conditional format
+function renderCondRules() {
+  var container = document.getElementById('cond-rules-container');
+  container.innerHTML = '';
+  
+  conditionalRules.forEach(function(rule, index) {
+    var div = document.createElement('div');
+    div.className = 'cond-rule';
+    div.innerHTML = 
+      '<div class="cond-rule-header">' +
+        '<span>Règle ' + (index + 1) + '</span>' +
+        '<button class="cond-rule-delete" onclick="deleteCondRule(' + index + ')">×</button>' +
+      '</div>' +
+      '<div class="modal-row">' +
+        '<select class="modal-select" onchange="updateCondRule(' + index + ', \'field\', this.value)">' +
+          '<option value="">Toutes valeurs</option>' +
+          pivotConfig.values.map(function(v) {
+            return '<option value="' + v.field + '"' + (rule.field === v.field ? ' selected' : '') + '>' + v.field + '</option>';
+          }).join('') +
+        '</select>' +
+        '<select class="modal-select" onchange="updateCondRule(' + index + ', \'operator\', this.value)">' +
+          '<option value="lt"' + (rule.operator === 'lt' ? ' selected' : '') + '>Inférieur à</option>' +
+          '<option value="lte"' + (rule.operator === 'lte' ? ' selected' : '') + '>Inférieur ou égal à</option>' +
+          '<option value="gt"' + (rule.operator === 'gt' ? ' selected' : '') + '>Supérieur à</option>' +
+          '<option value="gte"' + (rule.operator === 'gte' ? ' selected' : '') + '>Supérieur ou égal à</option>' +
+          '<option value="eq"' + (rule.operator === 'eq' ? ' selected' : '') + '>Égal à</option>' +
+          '<option value="neq"' + (rule.operator === 'neq' ? ' selected' : '') + '>Différent de</option>' +
+          '<option value="between"' + (rule.operator === 'between' ? ' selected' : '') + '>Entre</option>' +
+        '</select>' +
+        '<input type="number" class="modal-input" value="' + (rule.value || 0) + '" onchange="updateCondRule(' + index + ', \'value\', this.value)">' +
+      '</div>' +
+      '<div class="color-picker-row">' +
+        '<label style="font-size:11px;">Couleur texte:</label>' +
+        '<input type="color" value="' + (rule.textColor || '#000000') + '" onchange="updateCondRule(' + index + ', \'textColor\', this.value)">' +
+        '<label style="font-size:11px;">Fond:</label>' +
+        '<input type="color" value="' + (rule.bgColor || '#ffcccc') + '" onchange="updateCondRule(' + index + ', \'bgColor\', this.value)">' +
+      '</div>';
+    container.appendChild(div);
+  });
+}
+
+function addCondRule() {
+  conditionalRules.push({
+    field: '',
+    operator: 'lt',
+    value: 0,
+    textColor: '#000000',
+    bgColor: '#ffcccc'
+  });
+  renderCondRules();
+}
+
+function deleteCondRule(index) {
+  conditionalRules.splice(index, 1);
+  renderCondRules();
+}
+
+function updateCondRule(index, prop, value) {
+  if (prop === 'value') {
+    conditionalRules[index][prop] = parseFloat(value) || 0;
+  } else {
+    conditionalRules[index][prop] = value;
+  }
+}
+
+function applyConditionalFormat() {
+  saveOptions();
+  renderPivotTable();
+  closeModal('conditional-modal');
+}
+
+function saveOptions() {
+  grist.setOptions({
+    pivotConfig: pivotConfig,
+    lang: currentLang,
+    displayOptions: displayOptions,
+    cellFormat: cellFormat,
+    conditionalRules: conditionalRules
+  });
+}
+
+// Check conditional rules for a value
+function getConditionalStyle(value, fieldName) {
+  for (var i = 0; i < conditionalRules.length; i++) {
+    var rule = conditionalRules[i];
+    if (rule.field && rule.field !== fieldName) continue;
+    
+    var matches = false;
+    var num = parseFloat(value) || 0;
+    var ruleVal = parseFloat(rule.value) || 0;
+    
+    switch (rule.operator) {
+      case 'lt': matches = num < ruleVal; break;
+      case 'lte': matches = num <= ruleVal; break;
+      case 'gt': matches = num > ruleVal; break;
+      case 'gte': matches = num >= ruleVal; break;
+      case 'eq': matches = num === ruleVal; break;
+      case 'neq': matches = num !== ruleVal; break;
+    }
+    
+    if (matches) {
+      return 'color:' + rule.textColor + ';background:' + rule.bgColor + ';';
+    }
+  }
+  return '';
 }
 
 // =============================================================================

@@ -376,14 +376,185 @@
       font-weight: 700;
       color: var(--primary-dark);
     }
+
+    /* Toolbar buttons */
+    .toolbar-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .toolbar-btn:hover { background: rgba(255,255,255,0.3); }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+    .modal {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      min-width: 400px;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 {
+      font-size: 16px;
+      font-weight: 700;
+      margin: 0;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { margin-bottom: 16px; }
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+    .modal-btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+    .modal-btn-cancel {
+      background: #e2e8f0;
+      color: var(--text);
+    }
+    .modal-btn-apply {
+      background: var(--primary);
+      color: white;
+    }
+    .modal-btn:hover { opacity: 0.9; }
+
+    /* Form groups in modal */
+    .modal-section {
+      margin-bottom: 16px;
+    }
+    .modal-section h3 {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+    .modal-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .modal-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .modal-option input[type="radio"],
+    .modal-option input[type="checkbox"] {
+      margin: 0;
+    }
+    .modal-select {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      min-width: 120px;
+    }
+    .modal-input {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      width: 80px;
+    }
+
+    /* Conditional format rules */
+    .cond-rule {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+    .cond-rule-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .cond-rule-delete {
+      background: none;
+      border: none;
+      color: var(--danger);
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .color-picker-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .color-swatch {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
   <header class="header">
     <h1>📊 <span data-i18n="title">Pivot Table Pro</span></h1>
     <div class="header-actions">
+      <button class="toolbar-btn" onclick="openModal('display-modal')" title="Options d'affichage">
+        ⚙️ <span data-i18n="displayOptions">Options</span>
+      </button>
+      <button class="toolbar-btn" onclick="openModal('format-modal')" title="Format de cellule">
+        🎨 <span data-i18n="cellFormat">Format</span>
+      </button>
+      <button class="toolbar-btn" onclick="openModal('conditional-modal')" title="Format conditionnel">
+        📊 <span data-i18n="conditionalFormat">Conditionnel</span>
+      </button>
       <button class="export-btn" onclick="exportToCSV()">
-        📥 <span data-i18n="export">Exporter CSV</span>
+        📥 <span data-i18n="export">Exporter</span>
       </button>
       <button class="lang-btn active" onclick="setLanguage('fr')">FR</button>
       <button class="lang-btn" onclick="setLanguage('en')">EN</button>
@@ -464,6 +635,147 @@
     <span>© 2026 Said Hamadou (isaytoo)</span>
     <a href="https://gristup.fr" target="_blank">gristup.fr</a>
   </footer>
+
+  <!-- Display Options Modal -->
+  <div id="display-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>⚙️ Options d'affichage</h2>
+        <button class="modal-close" onclick="closeModal('display-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <h3>Totaux généraux</h3>
+          <div class="modal-row">
+            <label class="modal-option">
+              <input type="radio" name="grand-totals" value="show" checked> Afficher
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="grand-totals" value="hide"> Masquer
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="grand-totals" value="rows"> Lignes seulement
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="grand-totals" value="cols"> Colonnes seulement
+            </label>
+          </div>
+        </div>
+        <div class="modal-section">
+          <h3>Sous-totaux</h3>
+          <div class="modal-row">
+            <label class="modal-option">
+              <input type="radio" name="subtotals" value="show"> Afficher
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="subtotals" value="hide" checked> Masquer
+            </label>
+          </div>
+        </div>
+        <div class="modal-section">
+          <h3>Affichage</h3>
+          <div class="modal-row">
+            <label class="modal-option">
+              <input type="radio" name="view-mode" value="compact" checked> Vue compacte
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="view-mode" value="classic"> Vue classique
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="view-mode" value="flat"> Vue flat
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('display-modal')">Annuler</button>
+        <button class="modal-btn modal-btn-apply" onclick="applyDisplayOptions()">Appliquer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cell Format Modal -->
+  <div id="format-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>🎨 Format de cellule</h2>
+        <button class="modal-close" onclick="closeModal('format-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-section">
+          <h3>Choisir la valeur</h3>
+          <select id="format-field" class="modal-select" style="width:100%;">
+            <option value="">-- Toutes les valeurs --</option>
+          </select>
+        </div>
+        <div class="modal-section">
+          <h3>Format des nombres</h3>
+          <div class="modal-row">
+            <label style="font-size:12px;">Décimales:</label>
+            <input type="number" id="format-decimals" class="modal-input" value="2" min="0" max="10">
+          </div>
+          <div class="modal-row">
+            <label style="font-size:12px;">Séparateur milliers:</label>
+            <select id="format-thousands" class="modal-select">
+              <option value=" ">Espace</option>
+              <option value=",">Virgule</option>
+              <option value=".">Point</option>
+              <option value="">Aucun</option>
+            </select>
+          </div>
+          <div class="modal-row">
+            <label style="font-size:12px;">Symbole devise:</label>
+            <input type="text" id="format-currency" class="modal-input" placeholder="€" value="">
+          </div>
+          <div class="modal-row">
+            <label style="font-size:12px;">Position devise:</label>
+            <select id="format-currency-pos" class="modal-select">
+              <option value="after">Après</option>
+              <option value="before">Avant</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-section">
+          <h3>Alignement</h3>
+          <div class="modal-row">
+            <label class="modal-option">
+              <input type="radio" name="format-align" value="left"> Gauche
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="format-align" value="center"> Centre
+            </label>
+            <label class="modal-option">
+              <input type="radio" name="format-align" value="right" checked> Droite
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('format-modal')">Annuler</button>
+        <button class="modal-btn modal-btn-apply" onclick="applyCellFormat()">Appliquer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Conditional Format Modal -->
+  <div id="conditional-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>📊 Format conditionnel</h2>
+        <button class="modal-close" onclick="closeModal('conditional-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="cond-rules-container"></div>
+        <button class="modal-btn" style="background:#10b981;color:white;width:100%;" onclick="addCondRule()">
+          ➕ Ajouter une règle
+        </button>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('conditional-modal')">Annuler</button>
+        <button class="modal-btn modal-btn-apply" onclick="applyConditionalFormat()">Appliquer</button>
+      </div>
+    </div>
+  </div>
 
   <script src="widget.js"></script>
 </body>
