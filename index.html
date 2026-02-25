@@ -538,6 +538,89 @@
       border: 1px solid var(--border);
       cursor: pointer;
     }
+
+    /* Sort arrows in headers */
+    .sortable {
+      cursor: pointer;
+      user-select: none;
+      position: relative;
+    }
+    .sortable:hover {
+      background: #e0f2fe;
+    }
+    .sort-arrow {
+      font-size: 10px;
+      margin-left: 4px;
+      opacity: 0.5;
+    }
+    .sort-arrow.active {
+      opacity: 1;
+      color: var(--primary);
+    }
+
+    /* Filter icon in zone items */
+    .zone-item .filter-btn {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 12px;
+      opacity: 0.7;
+      padding: 0 2px;
+    }
+    .zone-item .filter-btn:hover { opacity: 1; }
+    .zone-item .filter-btn.has-filter {
+      color: #fbbf24;
+      opacity: 1;
+    }
+
+    /* Filter modal specific */
+    .filter-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 8px;
+    }
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .filter-item input[type="checkbox"] {
+      margin: 0;
+    }
+    .filter-search {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .filter-actions {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .filter-action-btn {
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: white;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .filter-action-btn:hover {
+      background: #f1f5f9;
+    }
+    .filter-action-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
   </style>
 </head>
 <body>
@@ -773,6 +856,37 @@
       <div class="modal-footer">
         <button class="modal-btn modal-btn-cancel" onclick="closeModal('conditional-modal')">Annuler</button>
         <button class="modal-btn modal-btn-apply" onclick="applyConditionalFormat()">Appliquer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter Modal -->
+  <div id="filter-modal" class="modal-overlay hidden" onclick="closeModalOnOverlay(event)">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="filter-modal-title">🔍 Filtre</h2>
+        <button class="modal-close" onclick="closeModal('filter-modal')">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="filter-actions">
+          <span style="font-size:12px;margin-right:8px;">Trier:</span>
+          <button class="filter-action-btn" onclick="sortFilterValues('asc')">A-Z</button>
+          <button class="filter-action-btn" onclick="sortFilterValues('desc')">Z-A</button>
+          <button class="filter-action-btn" onclick="selectTop10()">TOP 10</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          <label class="filter-item" style="padding:0;">
+            <input type="checkbox" id="filter-select-all" onchange="toggleSelectAll(this.checked)">
+            <span>Sélectionner tout</span>
+          </label>
+          <span id="filter-count" style="font-size:11px;color:#64748b;"></span>
+        </div>
+        <input type="text" class="filter-search" id="filter-search" placeholder="Rechercher..." oninput="filterSearchValues(this.value)">
+        <div class="filter-list" id="filter-values-list"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="modal-btn modal-btn-cancel" onclick="closeModal('filter-modal')">Annuler</button>
+        <button class="modal-btn modal-btn-apply" onclick="applyFilter()">Appliquer</button>
       </div>
     </div>
   </div>

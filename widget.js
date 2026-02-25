@@ -117,6 +117,14 @@ var pivotConfig = {
   values: []
 };
 
+// Filters and sorting
+var fieldFilters = {};  // { fieldName: [selectedValues] }
+var fieldSorts = {};    // { fieldName: 'asc' | 'desc' | null }
+var currentFilterField = '';
+var currentFilterZone = '';
+var allFilterValues = [];
+var filteredData = [];
+
 var aggregationFunctions = {
   sum: function(arr) {
     return arr.reduce(function(a, b) { return a + (parseFloat(b) || 0); }, 0);
@@ -188,6 +196,12 @@ grist.onOptions(function(options) {
   }
   if (options && options.conditionalRules) {
     conditionalRules = options.conditionalRules;
+  }
+  if (options && options.fieldFilters) {
+    fieldFilters = options.fieldFilters;
+  }
+  if (options && options.fieldSorts) {
+    fieldSorts = options.fieldSorts;
   }
   renderPivotZones();
 });
@@ -487,7 +501,10 @@ function renderPivotZones() {
 function createZoneItem(field, zone) {
   var div = document.createElement('div');
   div.className = 'zone-item';
+  var hasFilter = fieldFilters[field] && fieldFilters[field].length > 0;
+  var filterClass = hasFilter ? 'filter-btn has-filter' : 'filter-btn';
   div.innerHTML = '<span>' + field + '</span>' +
+                  '<button class="' + filterClass + '" onclick="openFilterModal(\'' + field + '\', \'' + zone + '\')" title="Filtrer">🔍</button>' +
                   '<button class="remove-btn" onclick="removeFromZone(\'' + field + '\', \'' + zone + '\')">&times;</button>';
   return div;
 }
@@ -575,9 +592,30 @@ function buildPivotData() {
   var colFields = pivotConfig.cols;
   var valueFields = pivotConfig.values;
   
+  // Use filtered data
+  var data = getFilteredData();
+  
   // Get unique values for rows and columns
-  var rowKeys = getUniqueKeys(tableData, rowFields);
-  var colKeys = getUniqueKeys(tableData, colFields);
+  var rowKeys = getUniqueKeys(data, rowFields);
+  var colKeys = getUniqueKeys(data, colFields);
+  
+  // Apply sorting to row/col keys
+  rowFields.forEach(function(f) {
+    if (fieldSorts[f]) {
+      rowKeys.sort(function(a, b) {
+        if (fieldSorts[f] === 'asc') return a.localeCompare(b);
+        return b.localeCompare(a);
+      });
+    }
+  });
+  colFields.forEach(function(f) {
+    if (fieldSorts[f]) {
+      colKeys.sort(function(a, b) {
+        if (fieldSorts[f] === 'asc') return a.localeCompare(b);
+        return b.localeCompare(a);
+      });
+    }
+  });
   
   // Build aggregation map
   var aggMap = {};
@@ -590,7 +628,7 @@ function buildPivotData() {
     grandTotal[v.field] = [];
   });
   
-  tableData.forEach(function(row) {
+  data.forEach(function(row) {
     var rowKey = rowFields.map(function(f) { return String(row[f] || ''); }).join('|||');
     var colKey = colFields.map(function(f) { return String(row[f] || ''); }).join('|||');
     var cellKey = rowKey + ':::' + colKey;
@@ -1016,7 +1054,9 @@ function saveOptions() {
     lang: currentLang,
     displayOptions: displayOptions,
     cellFormat: cellFormat,
-    conditionalRules: conditionalRules
+    conditionalRules: conditionalRules,
+    fieldFilters: fieldFilters,
+    fieldSorts: fieldSorts
   });
 }
 
@@ -1044,6 +1084,149 @@ function getConditionalStyle(value, fieldName) {
     }
   }
   return '';
+}
+
+// =============================================================================
+// FILTER AND SORT FUNCTIONS
+// =============================================================================
+
+function openFilterModal(field, zone) {
+  currentFilterField = field;
+  currentFilterZone = zone;
+  
+  // Get unique values for this field
+  var valuesSet = {};
+  tableData.forEach(function(row) {
+    var val = row[field];
+    var key = val === null || val === undefined ? '(vide)' : String(val);
+    valuesSet[key] = true;
+  });
+  
+  allFilterValues = Object.keys(valuesSet).sort();
+  
+  // Get currently selected values (or all if no filter)
+  var selectedValues = fieldFilters[field] || allFilterValues.slice();
+  
+  document.getElementById('filter-modal-title').textContent = '🔍 ' + field;
+  document.getElementById('filter-search').value = '';
+  
+  renderFilterValues(allFilterValues, selectedValues);
+  updateFilterCount(selectedValues.length, allFilterValues.length);
+  
+  document.getElementById('filter-modal').classList.remove('hidden');
+}
+
+function renderFilterValues(values, selectedValues) {
+  var container = document.getElementById('filter-values-list');
+  container.innerHTML = '';
+  
+  values.forEach(function(val) {
+    var isChecked = selectedValues.indexOf(val) !== -1;
+    var div = document.createElement('label');
+    div.className = 'filter-item';
+    div.innerHTML = '<input type="checkbox" value="' + val.replace(/"/g, '&quot;') + '"' + (isChecked ? ' checked' : '') + ' onchange="updateFilterSelection()">' +
+                    '<span>' + val + '</span>';
+    container.appendChild(div);
+  });
+  
+  // Update select all checkbox
+  var allChecked = values.length > 0 && values.every(function(v) { return selectedValues.indexOf(v) !== -1; });
+  document.getElementById('filter-select-all').checked = allChecked;
+}
+
+function updateFilterSelection() {
+  var checkboxes = document.querySelectorAll('#filter-values-list input[type="checkbox"]');
+  var selected = [];
+  checkboxes.forEach(function(cb) {
+    if (cb.checked) selected.push(cb.value);
+  });
+  updateFilterCount(selected.length, allFilterValues.length);
+}
+
+function updateFilterCount(selected, total) {
+  document.getElementById('filter-count').textContent = selected + ' éléments sur ' + total + ' sélectionnés';
+}
+
+function toggleSelectAll(checked) {
+  var checkboxes = document.querySelectorAll('#filter-values-list input[type="checkbox"]');
+  checkboxes.forEach(function(cb) {
+    cb.checked = checked;
+  });
+  updateFilterCount(checked ? allFilterValues.length : 0, allFilterValues.length);
+}
+
+function filterSearchValues(query) {
+  var filtered = allFilterValues.filter(function(val) {
+    return val.toLowerCase().indexOf(query.toLowerCase()) !== -1;
+  });
+  var selectedValues = getSelectedFilterValues();
+  renderFilterValues(filtered, selectedValues);
+}
+
+function getSelectedFilterValues() {
+  var checkboxes = document.querySelectorAll('#filter-values-list input[type="checkbox"]');
+  var selected = [];
+  checkboxes.forEach(function(cb) {
+    if (cb.checked) selected.push(cb.value);
+  });
+  return selected;
+}
+
+function sortFilterValues(direction) {
+  var sorted = allFilterValues.slice().sort(function(a, b) {
+    if (direction === 'asc') return a.localeCompare(b);
+    return b.localeCompare(a);
+  });
+  var selectedValues = getSelectedFilterValues();
+  renderFilterValues(sorted, selectedValues);
+  
+  // Also set field sort
+  fieldSorts[currentFilterField] = direction;
+}
+
+function selectTop10() {
+  // Select only first 10 values
+  var checkboxes = document.querySelectorAll('#filter-values-list input[type="checkbox"]');
+  var count = 0;
+  checkboxes.forEach(function(cb) {
+    cb.checked = count < 10;
+    count++;
+  });
+  updateFilterCount(Math.min(10, allFilterValues.length), allFilterValues.length);
+}
+
+function applyFilter() {
+  var selected = getSelectedFilterValues();
+  
+  if (selected.length === allFilterValues.length) {
+    // All selected = no filter
+    delete fieldFilters[currentFilterField];
+  } else {
+    fieldFilters[currentFilterField] = selected;
+  }
+  
+  saveOptions();
+  renderPivotZones();
+  renderPivotTable();
+  closeModal('filter-modal');
+}
+
+function getFilteredData() {
+  var data = tableData;
+  
+  // Apply all field filters
+  Object.keys(fieldFilters).forEach(function(field) {
+    var allowedValues = fieldFilters[field];
+    if (allowedValues && allowedValues.length > 0) {
+      data = data.filter(function(row) {
+        var val = row[field];
+        var key = val === null || val === undefined ? '(vide)' : String(val);
+        return allowedValues.indexOf(key) !== -1;
+      });
+    }
+  });
+  
+  return data;
 }
 
 // =============================================================================
