@@ -169,6 +169,7 @@ var aggregationFunctions = {
 
 grist.ready({
   requiredAccess: 'read table',
+  columns: [],  // All columns
   allowSelectBy: false
 });
 
@@ -178,48 +179,84 @@ grist.onOptions(function(options) {
   }
   if (options && options.pivotConfig) {
     pivotConfig = options.pivotConfig;
-  }
-  if (options && options.selectedTable) {
-    selectedTable = options.selectedTable;
-    document.getElementById('table-select').value = selectedTable;
-    loadTableData(selectedTable);
+    renderPivotZones();
   }
 });
 
-grist.on('message', function(msg) {
-  if (msg.tableId) {
-    loadTables();
+// Use onRecords to get data from the linked table
+grist.onRecords(function(records, mappings) {
+  if (!records || records.length === 0) {
+    showEmptyState();
+    return;
   }
+  
+  // Hide table selector - we use linked data
+  document.querySelector('.controls-bar').classList.add('hidden');
+  
+  // Get columns from first record
+  tableColumns = Object.keys(records[0]).filter(function(col) {
+    return col !== 'id' && col !== 'manualSort';
+  });
+  
+  // Detect column types
+  columnTypes = {};
+  tableColumns.forEach(function(col) {
+    var sample = records.find(function(r) { 
+      return r[col] !== null && r[col] !== undefined && r[col] !== ''; 
+    });
+    var val = sample ? sample[col] : null;
+    if (typeof val === 'number') {
+      columnTypes[col] = 'num';
+    } else if (typeof val === 'boolean') {
+      columnTypes[col] = 'bool';
+    } else if (val && !isNaN(Date.parse(val))) {
+      columnTypes[col] = 'date';
+    } else {
+      columnTypes[col] = 'text';
+    }
+  });
+  
+  // Store data
+  tableData = records;
+  selectedTable = 'linked';
+  
+  // Update stats
+  updateStats(records.length, tableColumns.length);
+  
+  // Render
+  renderFieldList();
+  renderPivotZones();
+  renderPivotTable();
+  showMainContent();
 });
 
-loadTables();
+// Fallback: try to load tables list for full document access mode
+tryLoadTables();
 
-async function loadTables() {
+async function tryLoadTables() {
   try {
     var tables = await grist.docApi.listTables();
-    allTables = tables;
-    
-    var select = document.getElementById('table-select');
-    select.innerHTML = '<option value="">' + t('selectTable') + '</option>';
-    
-    tables.forEach(function(tableName) {
-      if (!tableName.startsWith('GristHidden_')) {
-        var option = document.createElement('option');
-        option.value = tableName;
-        option.textContent = tableName;
-        select.appendChild(option);
-      }
-    });
-    
-    if (selectedTable && tables.indexOf(selectedTable) !== -1) {
-      select.value = selectedTable;
-      loadTableData(selectedTable);
-    } else {
-      showEmptyState();
+    if (tables && tables.length > 0) {
+      allTables = tables;
+      
+      var select = document.getElementById('table-select');
+      select.innerHTML = '<option value="">' + t('selectTable') + '</option>';
+      
+      tables.forEach(function(tableName) {
+        if (!tableName.startsWith('GristHidden_')) {
+          var option = document.createElement('option');
+          option.value = tableName;
+          option.textContent = tableName;
+          select.appendChild(option);
+        }
+      });
+      
+      // Show table selector
+      document.querySelector('.controls-bar').classList.remove('hidden');
     }
   } catch (e) {
-    console.error('Error loading tables:', e);
-    showEmptyState();
+    // No full document access - that's OK, we use onRecords
+    console.log('Using linked data mode');
   }
 }
 
@@ -227,7 +264,6 @@ async function onTableSelect(tableName) {
   selectedTable = tableName;
   
   grist.setOptions({
-    selectedTable: tableName,
     pivotConfig: pivotConfig,
     lang: currentLang
   });
