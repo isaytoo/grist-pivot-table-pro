@@ -1231,6 +1231,38 @@ function renderChart() {
       backgroundColor: chartColors.slice(0, chartData.labels.length),
       borderWidth: 1
     }];
+    // Show values in tooltip and on chart
+    config.options.plugins.tooltip = {
+      callbacks: {
+        label: function(context) {
+          var label = context.label || '';
+          var value = context.parsed || 0;
+          var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+          var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+          return label + ': ' + formatNumber(value) + ' (' + percentage + '%)';
+        }
+      }
+    };
+    // Show datalabels on pie/doughnut
+    config.options.plugins.datalabels = {
+      color: '#fff',
+      font: {
+        weight: 'bold',
+        size: 11
+      },
+      formatter: function(value, context) {
+        var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+        var percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+        return percentage + '%';
+      },
+      display: function(context) {
+        var total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
+        var value = context.dataset.data[context.dataIndex];
+        var percentage = total > 0 ? (value / total) * 100 : 0;
+        return percentage > 5; // Only show if > 5%
+      }
+    };
+    config.plugins = [ChartDataLabels];
   } else if (currentChartType === 'radar') {
     config.options.scales = {
       r: {
