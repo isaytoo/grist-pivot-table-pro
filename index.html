@@ -1,0 +1,470 @@
+<!--
+  Grist Pivot Table Pro Widget
+  Copyright 2026 Said Hamadou (isaytoo)
+  Licensed under the Apache License, Version 2.0
+  https://github.com/isaytoo/grist-pivot-table-pro
+-->
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pivot Table Pro - Tableau Croisé Dynamique</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  
+  <!-- Grist Plugin API -->
+  <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+  
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --primary: #0ea5e9;
+      --primary-dark: #0284c7;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+      min-height: 100vh;
+      padding-bottom: 30px;
+    }
+    
+    .hidden { display: none !important; }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .header h1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    
+    .lang-btn {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      padding: 4px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .lang-btn:hover { background: rgba(255,255,255,0.3); }
+    .lang-btn.active { background: white; color: var(--primary-dark); }
+
+    /* Controls */
+    .controls-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .control-group label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+    }
+    .control-group select {
+      padding: 6px 12px;
+      border: 2px solid var(--primary);
+      border-radius: 8px;
+      font-size: 12px;
+      background: white;
+      cursor: pointer;
+      min-width: 150px;
+    }
+    .control-group select:focus {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(14,165,233,0.2);
+    }
+
+    /* Main Layout */
+    .main-container {
+      display: flex;
+      gap: 16px;
+      padding: 16px;
+      min-height: calc(100vh - 140px);
+    }
+
+    /* Field Panel */
+    .field-panel {
+      width: 220px;
+      flex-shrink: 0;
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 12px;
+      max-height: calc(100vh - 160px);
+      overflow-y: auto;
+    }
+    .field-panel h3 {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .field-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .field-item {
+      padding: 8px 10px;
+      background: #f1f5f9;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+      border: 1px solid transparent;
+    }
+    .field-item:hover {
+      background: #e2e8f0;
+      border-color: var(--primary);
+    }
+    .field-item.dragging {
+      opacity: 0.5;
+      transform: scale(0.95);
+    }
+    .field-type {
+      font-size: 10px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+    .field-type.num { background: #dcfce7; color: #166534; }
+    .field-type.date { background: #fef3c7; color: #92400e; }
+    .field-type.bool { background: #fce7f3; color: #9d174d; }
+
+    /* Pivot Config */
+    .pivot-config {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .config-zones {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+    }
+    .drop-zone {
+      background: var(--card);
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      min-height: 80px;
+      transition: all 0.2s;
+    }
+    .drop-zone.drag-over {
+      border-color: var(--primary);
+      background: #f0f9ff;
+    }
+    .drop-zone h4 {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .drop-zone-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .zone-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 10px;
+      background: var(--primary);
+      color: white;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .zone-item .remove-btn {
+      background: none;
+      border: none;
+      color: white;
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      opacity: 0.7;
+      padding: 0 2px;
+    }
+    .zone-item .remove-btn:hover { opacity: 1; }
+    .zone-item select {
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: white;
+      font-size: 10px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    /* Pivot Table */
+    .pivot-table-container {
+      flex: 1;
+      background: var(--card);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: auto;
+    }
+    .pivot-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .pivot-table th, .pivot-table td {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+    .pivot-table th {
+      background: #f1f5f9;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .pivot-table th.col-header {
+      text-align: center;
+      background: #e0f2fe;
+    }
+    .pivot-table th.row-header {
+      background: #f0fdf4;
+    }
+    .pivot-table td.value-cell {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .pivot-table td.total-cell {
+      background: #fef3c7;
+      font-weight: 600;
+    }
+    .pivot-table tr.total-row td {
+      background: #fef3c7;
+      font-weight: 600;
+    }
+    .pivot-table tr.total-row th {
+      background: #fde68a;
+      font-weight: 700;
+    }
+
+    /* Export Button */
+    .export-btn {
+      background: var(--success);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .export-btn:hover { background: #059669; }
+
+    /* Loading & Empty States */
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px;
+      color: var(--text-muted);
+    }
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-muted);
+    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; }
+    .empty-state h2 { font-size: 18px; color: #334155; margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; max-width: 400px; margin: 0 auto; }
+
+    /* Footer */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 4px 12px;
+      font-size: 0.7em;
+      color: #94a3b8;
+      display: flex;
+      justify-content: space-between;
+      z-index: 1000;
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 16px;
+      background: #f0f9ff;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .stat-value {
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>📊 <span data-i18n="title">Pivot Table Pro</span></h1>
+    <div class="header-actions">
+      <button class="export-btn" onclick="exportToCSV()">
+        📥 <span data-i18n="export">Exporter CSV</span>
+      </button>
+      <button class="lang-btn active" onclick="setLanguage('fr')">FR</button>
+      <button class="lang-btn" onclick="setLanguage('en')">EN</button>
+    </div>
+  </header>
+
+  <div class="controls-bar">
+    <div class="control-group">
+      <label>📋 <span data-i18n="table">Table</span> :</label>
+      <select id="table-select" onchange="onTableSelect(this.value)">
+        <option value="" data-i18n="selectTable">-- Choisir une table --</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="stats-bar hidden" id="stats-bar">
+    <div class="stat-item">
+      📊 <span data-i18n="rows">Lignes</span>: <span class="stat-value" id="stat-rows">0</span>
+    </div>
+    <div class="stat-item">
+      📁 <span data-i18n="columns">Colonnes</span>: <span class="stat-value" id="stat-cols">0</span>
+    </div>
+    <div class="stat-item">
+      💾 <span data-i18n="size">Taille</span>: <span class="stat-value" id="stat-size">0 KB</span>
+    </div>
+  </div>
+
+  <div id="loading-state" class="loading">
+    <div class="loading-spinner"></div>
+    <span data-i18n="loading">Chargement des données...</span>
+  </div>
+
+  <div id="empty-state" class="empty-state hidden">
+    <div class="empty-state-icon">📊</div>
+    <h2 data-i18n="emptyTitle">Aucune donnée</h2>
+    <p data-i18n="emptyDesc">Sélectionnez une table source pour commencer à créer votre tableau croisé dynamique.</p>
+  </div>
+
+  <div id="main-container" class="main-container hidden">
+    <!-- Field Panel -->
+    <div class="field-panel">
+      <h3>📋 <span data-i18n="availableFields">Champs disponibles</span></h3>
+      <div class="field-list" id="field-list"></div>
+    </div>
+
+    <!-- Pivot Config & Table -->
+    <div class="pivot-config">
+      <div class="config-zones">
+        <div class="drop-zone" id="zone-rows" ondrop="dropField(event, 'rows')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+          <h4>📑 <span data-i18n="rowsZone">Lignes</span></h4>
+          <div class="drop-zone-items" id="zone-rows-items"></div>
+        </div>
+        <div class="drop-zone" id="zone-cols" ondrop="dropField(event, 'cols')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+          <h4>📊 <span data-i18n="colsZone">Colonnes</span></h4>
+          <div class="drop-zone-items" id="zone-cols-items"></div>
+        </div>
+        <div class="drop-zone" id="zone-values" ondrop="dropField(event, 'values')" ondragover="allowDrop(event)" ondragleave="leaveDrop(event)">
+          <h4>🔢 <span data-i18n="valuesZone">Valeurs</span></h4>
+          <div class="drop-zone-items" id="zone-values-items"></div>
+        </div>
+      </div>
+
+      <div class="pivot-table-container">
+        <div id="pivot-placeholder" class="empty-state">
+          <div class="empty-state-icon">👆</div>
+          <h2 data-i18n="dragFields">Glissez des champs</h2>
+          <p data-i18n="dragFieldsDesc">Glissez des champs dans les zones ci-dessus pour créer votre tableau croisé dynamique.</p>
+        </div>
+        <table class="pivot-table hidden" id="pivot-table">
+          <thead id="pivot-thead"></thead>
+          <tbody id="pivot-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span>© 2026 Said Hamadou (isaytoo)</span>
+    <a href="https://gristup.fr" target="_blank">gristup.fr</a>
+  </footer>
+
+  <script src="widget.js"></script>
+</body>
+</html>
