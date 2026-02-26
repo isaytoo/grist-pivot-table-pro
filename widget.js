@@ -117,6 +117,20 @@ var pivotConfig = {
   values: []
 };
 
+// Check if a number looks like a Grist timestamp (seconds since 1970, reasonable date range)
+function isLikelyTimestamp(val) {
+  // Grist dates are Unix timestamps in seconds
+  // Check if it's between 1990 and 2100 (reasonable date range)
+  return val > 631152000 && val < 4102444800;
+}
+
+// Format a Grist timestamp to a readable date
+function formatGristDate(timestamp) {
+  if (!timestamp || isNaN(timestamp)) return '-';
+  var date = new Date(timestamp * 1000); // Grist uses seconds, JS uses milliseconds
+  return date.toLocaleDateString();
+}
+
 // Filters and sorting
 var fieldFilters = {};  // { fieldName: [selectedValues] }
 var fieldSorts = {};    // { fieldName: 'asc' | 'desc' | null }
@@ -229,7 +243,12 @@ grist.onRecords(function(records, mappings) {
     });
     var val = sample ? sample[col] : null;
     if (typeof val === 'number') {
-      columnTypes[col] = 'num';
+      // Check if it's a Grist date (Unix timestamp in seconds, between 1970 and 2100)
+      if (val > 0 && val < 4102444800 && (col.toLowerCase().indexOf('date') !== -1 || isLikelyTimestamp(val))) {
+        columnTypes[col] = 'date';
+      } else {
+        columnTypes[col] = 'num';
+      }
     } else if (typeof val === 'boolean') {
       columnTypes[col] = 'bool';
     } else if (val && !isNaN(Date.parse(val))) {
@@ -315,7 +334,12 @@ async function loadTableData(tableName) {
       if (values && values.length > 0) {
         var sample = values.find(function(v) { return v !== null && v !== undefined && v !== ''; });
         if (typeof sample === 'number') {
-          columnTypes[col] = 'num';
+          // Check if it's a Grist date (Unix timestamp in seconds, between 1970 and 2100)
+          if (sample > 0 && sample < 4102444800 && (col.toLowerCase().indexOf('date') !== -1 || isLikelyTimestamp(sample))) {
+            columnTypes[col] = 'date';
+          } else {
+            columnTypes[col] = 'num';
+          }
         } else if (typeof sample === 'boolean') {
           columnTypes[col] = 'bool';
         } else if (sample && !isNaN(Date.parse(sample))) {
@@ -649,8 +673,8 @@ function buildPivotData() {
   });
   
   data.forEach(function(row) {
-    var rowKey = rowFields.map(function(f) { return String(row[f] || ''); }).join('|||');
-    var colKey = colFields.map(function(f) { return String(row[f] || ''); }).join('|||');
+    var rowKey = rowFields.map(function(f) { return formatFieldValue(row[f], f); }).join('|||');
+    var colKey = colFields.map(function(f) { return formatFieldValue(row[f], f); }).join('|||');
     var cellKey = rowKey + ':::' + colKey;
     
     if (!aggMap[cellKey]) {
@@ -696,12 +720,20 @@ function buildPivotData() {
   };
 }
 
+function formatFieldValue(value, field) {
+  if (value === null || value === undefined || value === '') return '';
+  if (columnTypes[field] === 'date' && typeof value === 'number') {
+    return formatGristDate(value);
+  }
+  return String(value);
+}
+
 function getUniqueKeys(data, fields) {
   if (fields.length === 0) return [''];
   
   var keysSet = {};
   data.forEach(function(row) {
-    var key = fields.map(function(f) { return String(row[f] || ''); }).join('|||');
+    var key = fields.map(function(f) { return formatFieldValue(row[f], f); }).join('|||');
     keysSet[key] = true;
   });
   
