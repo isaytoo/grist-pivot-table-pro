@@ -869,7 +869,7 @@ function formatNumber(num, fieldName) {
   
   // Format the number
   var formatted;
-  if (Number.isInteger(num) && decimals === 0) {
+  if (decimals === 0) {
     formatted = Math.round(num).toString();
   } else {
     formatted = num.toFixed(decimals);
