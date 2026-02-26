@@ -1417,7 +1417,8 @@ function applyDisplayOptions() {
 }
 
 function applyCellFormat() {
-  cellFormat.decimals = parseInt(document.getElementById('format-decimals').value) || 2;
+  var decimalsVal = parseInt(document.getElementById('format-decimals').value);
+  cellFormat.decimals = isNaN(decimalsVal) ? 2 : decimalsVal;
   cellFormat.thousands = document.getElementById('format-thousands').value;
   cellFormat.currency = document.getElementById('format-currency').value;
   cellFormat.currencyPos = document.getElementById('format-currency-pos').value;
